@@ -1,28 +1,25 @@
 #!/usr/bin/env bash
 # Dump the three game databases to a dated folder and prune old backups.
-# Used both by the gf-backup.timer and by `gfctl backup`.
+# Runs as root (via gf-backup.service) and dumps as the postgres DB superuser
+# through `runuser` -- PostgreSQL peer authentication, no password needed.
+# Invoked by gf-backup.timer and by `gfctl backup`.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/common.sh
-source "${SCRIPT_DIR}/lib/common.sh"
-load_env "${SCRIPT_DIR}/gfserver.env"
-
+GF_ROOT="${GF_ROOT:-/opt/gfserver}"
 BACKUP_KEEP="${BACKUP_KEEP:-14}"
+
+log() { printf '[gf-backup] %s
+' "$*"; }
+
 backup_root="${GF_ROOT}/backup"
 stamp="$(date +%Y-%m-%d_%H-%M-%S)"
 dest="${backup_root}/${stamp}"
 mkdir -p "$dest"
 
-export PGPASSWORD="${DB_PASSWORD}"
-db_host="127.0.0.1"
-db_user="gf_app"
-
 for db in gf_gs gf_ls gf_ms; do
   log "Dumping ${db}..."
-  pg_dump -h "$db_host" -U "$db_user" -Fp "$db" > "${dest}/${db}.sql"
+  runuser -u postgres -- pg_dump -Fp "$db" > "${dest}/${db}.sql"
 done
-
 log "Backup written to ${dest}"
 
 # Prune: keep only the newest BACKUP_KEEP dated folders.

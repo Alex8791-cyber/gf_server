@@ -69,5 +69,7 @@ Inspect a component's log with `journalctl -u gf-zone -f`.
 - A component keeps restarting → `journalctl -u gf-<name> -n 50`.
 - DB connection errors → confirm `gf_app` works:
   `PGPASSWORD=... psql -h 127.0.0.1 -U gf_app -d gf_gs -c '\dt'`.
-- `install.sh` exec error on the binaries → 32-bit support; re-run the installer,
-  which enables i386 multiarch as a fallback.
+- A component fails with an exec/format error → the server binaries are 32-bit.
+  A 64-bit Ubuntu kernel normally runs static 32-bit ELF directly. If it does
+  not, enable multiarch:
+  `sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install -y libc6:i386`.

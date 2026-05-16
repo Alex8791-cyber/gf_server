@@ -37,13 +37,13 @@ cmd_restore() {
   warn "This will OVERWRITE databases gf_gs, gf_ls, gf_ms from ${folder}."
   read -rp "Type 'yes' to continue: " confirm
   [ "$confirm" = "yes" ] || die "Aborted."
-  load_env "${SCRIPT_DIR}/gfserver.env"
+  # Restore as the postgres superuser -- the dumps recreate objects owned by
+  # 'postgres' and superuser-only functions, which gf_app cannot load.
   for db in gf_gs gf_ls gf_ms; do
     log "Restoring ${db}..."
     sudo -u postgres psql -q -c "DROP DATABASE IF EXISTS ${db};"
     sudo -u postgres psql -q -c "CREATE DATABASE ${db} ENCODING 'UTF8' TEMPLATE template0;"
-    PGPASSWORD="${DB_PASSWORD}" psql -h 127.0.0.1 -U gf_app -q -d "$db" \
-      -f "${dir}/${db}.sql"
+    sudo -u postgres psql -v ON_ERROR_STOP=1 -q -d "$db" -f "${dir}/${db}.sql"
   done
   log "Restore complete."
 }
@@ -53,7 +53,7 @@ case "${1:-}" in
   stop)    require_root; systemctl stop gfserver.target;    log "Server stopped." ;;
   restart) require_root; systemctl restart gfserver.target; log "Server restarted." ;;
   status)  cmd_status ;;
-  backup)  "${SCRIPT_DIR}/gf-backup.sh" ;;
+  backup)  require_root; systemctl start gf-backup.service; log "Backup finished — see ${GF_ROOT}/backup/." ;;
   restore) require_root; shift; cmd_restore "${1:-}" ;;
   *)       usage ;;
 esac

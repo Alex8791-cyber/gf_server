@@ -20,6 +20,11 @@ preflight() {
   [ "$(cd "${SCRIPT_DIR}/.." && pwd)" = "$GF_ROOT" ] \
     || die "Repo must live at ${GF_ROOT} (found $(cd "${SCRIPT_DIR}/.." && pwd))."
   load_env "${SCRIPT_DIR}/gfserver.env"
+  # A non-empty operator-supplied password must avoid characters that would
+  # break the sed/SQL substitutions below.
+  if [ -n "${DB_PASSWORD:-}" ] && printf '%s' "$DB_PASSWORD" | grep -q '[^A-Za-z0-9._-]'; then
+    die "DB_PASSWORD may only contain A-Z a-z 0-9 . _ - (edit gfserver.env)."
+  fi
   log "Preflight OK — installing to ${GF_ROOT}."
 }
 
@@ -31,7 +36,7 @@ install_packages() {
   apt-get install -y \
     postgresql-16 postgresql-contrib \
     ufw fail2ban unattended-upgrades \
-    openssl coreutils
+    openssl coreutils file
 }
 
 # --- 3. System user + filesystem layout ------------------------------------
@@ -56,28 +61,27 @@ setup_user() {
 ensure_32bit_support() {
   local probe="${GF_ROOT}/TicketServer/TicketServer"
   [ -f "$probe" ] || { warn "TicketServer binary missing — skipping 32-bit check."; return; }
-  # The binaries are statically linked; a 64-bit kernel runs them directly.
-  # If exec fails with a format error, enable i386 multiarch as a fallback.
-  if ! head -c 0 < <("$probe" --version 2>/dev/null) 2>/dev/null \
-     && file "$probe" | grep -q 'cannot execute'; then
-    warn "Enabling i386 multiarch as a fallback..."
-    dpkg --add-architecture i386
-    apt-get update -y
-    apt-get install -y libc6:i386
+  # The binaries are statically linked 32-bit ELF; a 64-bit kernel runs them
+  # directly. We only report the architecture here — if a component later
+  # fails with an exec/format error, the runbook documents the i386 fallback.
+  if file "$probe" | grep -q 'ELF 32-bit'; then
+    log "Server binaries are 32-bit ELF (statically linked) — OK on a 64-bit kernel."
+    log "On an exec/format error, see the 32-bit note in docs/deployment-runbook.md."
   else
-    log "32-bit execution support OK."
+    log "32-bit check: binary architecture not recognised — review manually."
   fi
 }
 
 # --- 5. PostgreSQL hardening + databases -----------------------------------
 configure_postgres() {
   local pg_conf="/etc/postgresql/16/main/postgresql.conf"
-  local hba="/etc/postgresql/16/main/pg_hba.conf"
 
-  log "Hardening PostgreSQL (localhost-only, scram-sha-256)..."
+  log "Hardening PostgreSQL (localhost-only)..."
   sed -i "s/^#*listen_addresses.*/listen_addresses = 'localhost'/" "$pg_conf"
-  # Force scram-sha-256 for all local/host lines (idempotent).
-  sed -i -E 's/(^(local|host)\s+\S+\s+\S+(\s+\S+)?\s+)(md5|peer|ident|trust)\s*$/\1scram-sha-256/' "$hba"
+  # pg_hba.conf is left at the PostgreSQL 16 default: TCP (host) connections
+  # use scram-sha-256 and local socket connections use peer auth — both are
+  # what we want. Rewriting the local 'peer' lines would break the
+  # `sudo -u postgres psql` calls this installer relies on.
   systemctl restart postgresql
 
   # Generate a DB password if the operator left it blank.
@@ -146,6 +150,8 @@ SQL
 # --- 6. Render component setup.ini files -----------------------------------
 render_configs() {
   log "Writing database credentials into component setup.ini files..."
+  # Only the top-level setup.ini and GatewayServer/setup.ini carry DB
+  # credential fields; the other components' setup.ini files hold none.
   local f
   for f in "${GF_ROOT}/setup.ini" "${GF_ROOT}/GatewayServer/setup.ini"; do
     [ -f "$f" ] || continue
@@ -181,6 +187,9 @@ install_systemd() {
   install -m 644 "${SCRIPT_DIR}"/systemd/gf-*.service /etc/systemd/system/
   install -m 644 "${SCRIPT_DIR}"/systemd/gf-*.timer   /etc/systemd/system/
   install -m 644 "${SCRIPT_DIR}/systemd/gfserver.target" /etc/systemd/system/
+  # Apply the operator's backup retention setting to the installed unit.
+  sed -i "s/^Environment=BACKUP_KEEP=.*/Environment=BACKUP_KEEP=${BACKUP_KEEP:-14}/" \
+    /etc/systemd/system/gf-backup.service
   systemctl daemon-reload
   systemctl enable gfserver.target gf-backup.timer
   systemctl start gf-backup.timer

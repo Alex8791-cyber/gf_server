@@ -1,14 +1,15 @@
 [Unit]
 Description=Grand Fantasia database backup
 After=postgresql.service
+Requires=postgresql.service
 
 [Service]
 Type=oneshot
-User=gfserver
-Group=gfserver
+Environment=GF_ROOT=/opt/gfserver
+Environment=BACKUP_KEEP=14
 ExecStart=/opt/gfserver/deploy/gf-backup.sh
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=/opt/gfserver
+ReadWritePaths=/opt/gfserver/backup
