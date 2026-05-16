@@ -1,0 +1,11 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.exe binary
+*.dll binary
+*.dat binary
+*.pkg binary
+*.bin binary
+*.idx binary
+*.dxvk-cache binary
+*.ffs_db binary
