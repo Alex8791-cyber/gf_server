@@ -8,8 +8,7 @@ set -euo pipefail
 GF_ROOT="${GF_ROOT:-/opt/gfserver}"
 BACKUP_KEEP="${BACKUP_KEEP:-14}"
 
-log() { printf '[gf-backup] %s
-' "$*"; }
+log() { printf '[gf-backup] %s\n' "$*"; }
 
 backup_root="${GF_ROOT}/backup"
 stamp="$(date +%Y-%m-%d_%H-%M-%S)"
