@@ -1,0 +1,22 @@
+[Unit]
+Description=Grand Fantasia Ticket Server
+After=network-online.target postgresql.service
+Wants=network-online.target
+PartOf=gfserver.target
+
+[Service]
+Type=simple
+User=gfserver
+Group=gfserver
+WorkingDirectory=/opt/gfserver/TicketServer
+ExecStart=/opt/gfserver/TicketServer/TicketServer -p 7777
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/opt/gfserver
+
+[Install]
+WantedBy=gfserver.target
