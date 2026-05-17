@@ -18,12 +18,13 @@ final class RankingRepository
      */
     public function topByLevel(int $limit = 50): array
     {
+        // $limit is an int by signature, so concatenating it is injection-safe;
+        // LIMIT is not reliably bindable as a string parameter via PDO.
         $rows = $this->db->run(
             'gf_gs',
             'SELECT given_name, level FROM player_characters '
             . 'WHERE given_name IS NOT NULL '
-            . 'ORDER BY level DESC, exp DESC LIMIT :limit',
-            [':limit' => $limit],
+            . 'ORDER BY level DESC, exp DESC LIMIT ' . $limit,
         )->fetchAll();
 
         return array_map(static fn (array $r): array => [

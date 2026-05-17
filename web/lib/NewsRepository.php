@@ -18,12 +18,13 @@ final class NewsRepository
      */
     public function published(int $limit = 20): array
     {
+        // $limit is an int by signature, so concatenating it is injection-safe;
+        // LIMIT is not reliably bindable as a string parameter via PDO.
         $rows = $this->db->run(
             'gf_ls',
             'SELECT id, title, body, published_at FROM web_news '
             . 'WHERE published_at IS NOT NULL '
-            . 'ORDER BY published_at DESC LIMIT :limit',
-            [':limit' => $limit],
+            . 'ORDER BY published_at DESC LIMIT ' . $limit,
         )->fetchAll();
 
         return array_map(static fn (array $r): array => [

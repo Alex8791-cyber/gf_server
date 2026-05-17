@@ -238,6 +238,8 @@ env[GF_MAIL_FROM] = ${GF_MAIL_FROM:-noreply@localhost}
 env[GF_MAIL_FROM_NAME] = ${GF_MAIL_FROM_NAME:-Grand Fantasia}
 env[GF_DOWNLOAD_URL] = ${GF_DOWNLOAD_URL:-}
 POOL
+  # The pool file holds the gf_web DB password — keep it off world-read.
+  chmod 640 "/etc/php/${php_ver}/fpm/pool.d/gfserver.conf"
   systemctl restart "php${php_ver}-fpm"
 
   log "Writing the Apache virtual host..."
