@@ -57,7 +57,7 @@ final class AccountServiceTest extends DbTestCase
             [':m' => $username],
         )->fetch();
         $this->assertNotFalse($userRow, 'tb_user row exists');
-        $this->assertStringStartsWith('$2y$', $userRow['pwd'], 'password stored as bcrypt');
+        $this->assertStringStartsWith('$2a$', $userRow['pwd'], 'password stored as bcrypt');
         $this->assertNotSame('secret-password', $userRow['pwd'], 'password not plaintext');
     }
 

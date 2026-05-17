@@ -17,8 +17,6 @@ namespace GfServer;
  */
 final class AccountService
 {
-    private const BCRYPT_COST = 12;
-
     public function __construct(private readonly Database $db)
     {
     }
@@ -30,7 +28,7 @@ final class AccountService
         Validation::username($username);
         Validation::password($password);
 
-        $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => self::BCRYPT_COST]);
+        $hash = $this->hashPassword($password);
 
         $taken = $this->db->run(
             'gf_ms',
@@ -89,7 +87,7 @@ final class AccountService
         $username = strtolower(trim($username));
         Validation::password($newPassword);
 
-        $hash = password_hash($newPassword, PASSWORD_BCRYPT, ['cost' => self::BCRYPT_COST]);
+        $hash = $this->hashPassword($newPassword);
 
         $stmt = $this->db->run(
             'gf_ms',
@@ -99,5 +97,25 @@ final class AccountService
         if ($stmt->rowCount() === 0) {
             throw new ConflictException("Account '{$username}' not found.");
         }
+    }
+
+    /**
+     * Hash a password with bcrypt via PostgreSQL's pgcrypto.
+     *
+     * The hash MUST be produced by pgcrypto, not PHP's password_hash(): the
+     * account_login() stored procedure verifies it with pgcrypto's crypt(),
+     * and pgcrypto does not accept the $2y$ bcrypt variant that password_hash()
+     * emits. Generating the hash here with the same implementation that later
+     * verifies it guarantees they agree.
+     */
+    private function hashPassword(string $password): string
+    {
+        $row = $this->db->run(
+            'gf_ms',
+            "SELECT crypt(:pw, gen_salt('bf', 12)) AS hash",
+            [':pw' => $password],
+        )->fetch();
+
+        return (string) $row['hash'];
     }
 }
