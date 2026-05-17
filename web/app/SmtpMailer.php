@@ -38,8 +38,7 @@ final class SmtpMailer implements Mailer
             $headerLines[] = "{$name}: {$value}";
         }
 
-        $ok = mail($to, $subject, $body, implode("
-", $headerLines));
+        $ok = mail($to, $subject, $body, implode("\r\n", $headerLines));
         if ($ok === false) {
             throw new \RuntimeException("Failed to send mail to {$to}.");
         }
