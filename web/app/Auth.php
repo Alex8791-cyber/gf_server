@@ -12,8 +12,8 @@ use GfServer\Database;
  */
 final class Auth
 {
-    private const SESSION_ACCOUNT_ID = 'auth.account_id';
-    private const SESSION_USERNAME = 'auth.username';
+    public const SESSION_ACCOUNT_ID = 'auth.account_id';
+    public const SESSION_USERNAME = 'auth.username';
 
     public function __construct(
         private readonly Session $session,

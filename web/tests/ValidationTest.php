@@ -45,4 +45,12 @@ final class ValidationTest extends TestCase
         $this->expectException(ValidationException::class);
         Validation::characterName('Sir Lancelot');
     }
+
+    public function testEmailAcceptsValidAndRejectsInvalid(): void
+    {
+        Validation::email('player@example.com');
+
+        $this->expectException(ValidationException::class);
+        Validation::email('not-an-email');
+    }
 }

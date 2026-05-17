@@ -15,6 +15,12 @@
             <a href="/downloads">Download</a>
             <a href="/status">Status</a>
             <a href="/rankings">Rankings</a>
+            <?php if (!empty($navLoggedIn)): ?>
+                <a href="/account"><?= e($navUsername ?? '') ?></a>
+            <?php else: ?>
+                <a href="/login">Log in</a>
+                <a href="/register">Register</a>
+            <?php endif; ?>
         </nav>
     </header>
     <main class="site-main">

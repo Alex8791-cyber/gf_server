@@ -10,8 +10,22 @@ namespace GfServer\App;
  */
 final class View
 {
+    /** @var array<string, mixed> */
+    private array $shared = [];
+
     public function __construct(private readonly string $templateDir)
     {
+    }
+
+    /**
+     * Register data made available to every rendered template (e.g. the
+     * logged-in user for the layout). Per-render data takes precedence.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function share(array $data): void
+    {
+        $this->shared = $data + $this->shared;
     }
 
     /**
@@ -21,6 +35,7 @@ final class View
      */
     public function render(string $template, array $data = []): string
     {
+        $data += $this->shared;
         $content = $this->capture($template, $data);
 
         return $this->capture('layout', ['content' => $content] + $data);

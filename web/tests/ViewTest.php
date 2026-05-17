@@ -44,4 +44,11 @@ final class ViewTest extends TestCase
         $this->expectException(\RuntimeException::class);
         (new View($this->dir))->render('does_not_exist');
     }
+
+    public function testSharedDataIsAvailableToTemplates(): void
+    {
+        $view = new View($this->dir);
+        $view->share(['name' => 'Shared']);
+        $this->assertSame('[Hi Shared]', $view->render('page'));
+    }
 }
