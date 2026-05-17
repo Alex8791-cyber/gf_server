@@ -210,6 +210,11 @@ setup_web_server() {
   usermod -aG "$GF_GROUP" www-data
   chmod 750 "$GF_ROOT"
 
+  # Discover the PHP-FPM socket rather than hard-coding the PHP version.
+  local php_fpm_sock
+  php_fpm_sock="$(ls /run/php/php*-fpm.sock 2>/dev/null | head -1)"
+  [ -n "$php_fpm_sock" ] || die "PHP-FPM socket not found under /run/php/."
+
   log "Writing the Apache virtual host..."
   cat > /etc/apache2/sites-available/gfserver.conf <<APACHE
 <VirtualHost *:80>
@@ -224,7 +229,7 @@ setup_web_server() {
     </Directory>
 
     <FilesMatch \.php\$>
-        SetHandler "proxy:unix:/run/php/php8.3-fpm.sock|fcgi://localhost"
+        SetHandler "proxy:unix:${php_fpm_sock}|fcgi://localhost"
     </FilesMatch>
 
     ErrorLog \${APACHE_LOG_DIR}/gfserver-error.log
@@ -235,7 +240,7 @@ APACHE
   a2enmod proxy_fcgi setenvif >/dev/null
   a2dissite 000-default >/dev/null 2>&1 || true
   a2ensite gfserver >/dev/null
-  systemctl reload apache2
+  systemctl restart apache2
   log "Web server ready. Run 'certbot --apache' once DNS points at this host (see runbook)."
 }
 

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace GfServer\App;
 
 /**
- * Sends mail through an SMTP relay using PHP's mail() configured via the
- * relay set in php.ini / the deployment, or directly if a host is given.
- * Connection details come from the GF_SMTP_* environment variables.
+ * Sends transactional mail via PHP's mail(), which relies on a host-level
+ * MTA / SMTP relay being configured on the server. The From identity comes
+ * from the GF_MAIL_FROM / GF_MAIL_FROM_NAME environment variables.
  */
 final class SmtpMailer implements Mailer
 {
@@ -17,7 +17,7 @@ final class SmtpMailer implements Mailer
     ) {
     }
 
-    /** Build an SmtpMailer from GF_SMTP_* / GF_MAIL_FROM* environment variables. */
+    /** Build an SmtpMailer from the GF_MAIL_FROM / GF_MAIL_FROM_NAME environment variables. */
     public static function fromEnv(): self
     {
         $from = getenv('GF_MAIL_FROM') ?: 'noreply@localhost';
