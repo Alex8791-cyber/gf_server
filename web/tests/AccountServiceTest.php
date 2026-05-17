@@ -222,4 +222,14 @@ final class AccountServiceTest extends DbTestCase
         )->fetchColumn();
         $this->assertSame(1, (int) $login);
     }
+
+    public function testFindByUsernameReturnsTheAccountId(): void
+    {
+        $username = $this->uniqueName();
+        $id = $this->service->register($username, 'find-user-pw');
+
+        $this->assertSame($id, $this->service->findByUsername($username));
+        $this->assertSame($id, $this->service->findByUsername(strtoupper($username)));
+        $this->assertNull($this->service->findByUsername('tno_such_user_x'));
+    }
 }
