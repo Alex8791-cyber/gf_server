@@ -181,6 +181,50 @@ run_migrations() {
   "${SCRIPT_DIR}/migrate.sh"
 }
 
+# --- 5d. Web server (Apache + PHP-FPM) -------------------------------------
+setup_web_server() {
+  log "Installing Apache and PHP-FPM..."
+  apt-get install -y \
+    apache2 php-fpm php-cli php-pgsql php-mbstring \
+    composer certbot python3-certbot-apache
+
+  log "Building the portal web dependencies..."
+  sudo -u "$GF_USER" composer install --no-interaction --no-progress \
+    --no-dev --working-dir "${GF_ROOT}/web"
+
+  # Apache must traverse ${GF_ROOT} to reach web/public.
+  usermod -aG "$GF_GROUP" www-data
+  chmod 750 "$GF_ROOT"
+
+  log "Writing the Apache virtual host..."
+  cat > /etc/apache2/sites-available/gfserver.conf <<APACHE
+<VirtualHost *:80>
+    ServerName ${PORTAL_DOMAIN}
+    DocumentRoot ${GF_ROOT}/web/public
+
+    <Directory ${GF_ROOT}/web/public>
+        Options -Indexes +FollowSymLinks
+        AllowOverride None
+        Require all granted
+        FallbackResource /index.php
+    </Directory>
+
+    <FilesMatch \.php\$>
+        SetHandler "proxy:unix:/run/php/php8.3-fpm.sock|fcgi://localhost"
+    </FilesMatch>
+
+    ErrorLog \${APACHE_LOG_DIR}/gfserver-error.log
+    CustomLog \${APACHE_LOG_DIR}/gfserver-access.log combined
+</VirtualHost>
+APACHE
+
+  a2enmod proxy_fcgi setenvif >/dev/null
+  a2dissite 000-default >/dev/null 2>&1 || true
+  a2ensite gfserver >/dev/null
+  systemctl reload apache2
+  log "Web server ready. Run 'certbot --apache' once DNS points at this host (see runbook)."
+}
+
 # --- 6. Render component setup.ini files -----------------------------------
 render_configs() {
   log "Writing database credentials into component setup.ini files..."
@@ -236,6 +280,8 @@ configure_firewall() {
   ufw default deny incoming
   ufw default allow outgoing
   ufw limit "${SSH_PORT}/tcp" comment 'SSH'
+  ufw allow 80/tcp comment 'HTTP'
+  ufw allow 443/tcp comment 'HTTPS'
   local port
   for port in $GAME_PORTS; do
     ufw allow "${port}/tcp" comment 'GF game port'
@@ -258,6 +304,7 @@ main() {
   configure_postgres
   setup_web_role
   run_migrations
+  setup_web_server
   render_configs
   patch_binaries
   install_systemd
