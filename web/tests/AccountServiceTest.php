@@ -154,4 +154,72 @@ final class AccountServiceTest extends DbTestCase
         )->fetchColumn();
         $this->assertSame(1, (int) $open, 'unlocked account is accepted (nRet=1)');
     }
+
+    public function testRegisterWithEmailLocksTheAccountAndStoresTheEmail(): void
+    {
+        $username = $this->uniqueName();
+        $id = $this->service->register($username, 'email-reg-pw', 'a' . $username . '@example.com');
+
+        $byauthority = $this->db->run(
+            'gf_ms',
+            'SELECT byauthority FROM tb_user WHERE mid = :m',
+            [':m' => $username],
+        )->fetchColumn();
+        $this->assertSame(255, (int) $byauthority, 'account starts locked');
+
+        $web = $this->db->run(
+            'gf_ls',
+            'SELECT email, email_verified FROM web_account WHERE account_id = :id',
+            [':id' => $id],
+        )->fetch();
+        $this->assertSame('a' . $username . '@example.com', $web['email']);
+    }
+
+    public function testFindByEmailReturnsTheAccountId(): void
+    {
+        $username = $this->uniqueName();
+        $email = 'f' . $username . '@example.com';
+        $id = $this->service->register($username, 'find-email-pw', $email);
+
+        $this->assertSame($id, $this->service->findByEmail($email));
+        $this->assertNull($this->service->findByEmail('nobody@example.com'));
+    }
+
+    public function testConfirmEmailVerifiesAndUnlocksTheAccount(): void
+    {
+        $username = $this->uniqueName();
+        $id = $this->service->register($username, 'confirm-pw', 'c' . $username . '@example.com');
+
+        $this->service->confirmEmail($id);
+
+        $verified = $this->db->run(
+            'gf_ls',
+            'SELECT email_verified FROM web_account WHERE account_id = :id',
+            [':id' => $id],
+        )->fetchColumn();
+        $this->assertTrue($verified === true || $verified === 't' || $verified === '1');
+
+        $login = $this->db->run(
+            'gf_ms',
+            "SELECT (account_login(:u, :p, '127.0.0.1')).nRet",
+            [':u' => $username, ':p' => 'confirm-pw'],
+        )->fetchColumn();
+        $this->assertSame(1, (int) $login, 'confirmed account can log in');
+    }
+
+    public function testChangePasswordForAccountUpdatesByAccountId(): void
+    {
+        $username = $this->uniqueName();
+        $id = $this->service->register($username, 'old-acc-pw', 'p' . $username . '@example.com');
+        $this->service->confirmEmail($id);
+
+        $this->service->changePasswordForAccount($id, 'new-acc-pw');
+
+        $login = $this->db->run(
+            'gf_ms',
+            "SELECT (account_login(:u, :p, '127.0.0.1')).nRet",
+            [':u' => $username, ':p' => 'new-acc-pw'],
+        )->fetchColumn();
+        $this->assertSame(1, (int) $login);
+    }
 }

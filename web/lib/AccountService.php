@@ -21,12 +21,22 @@ final class AccountService
     {
     }
 
-    /** Register a new account. Returns the new accounts.id. */
-    public function register(string $username, string $password): int
+    /**
+     * Register a new account. Returns the new accounts.id.
+     *
+     * When $email is given the account is created locked
+     * (tb_user.byauthority = 255) and a web_account row is stored — the
+     * email-confirmation flow unlocks it. When $email is null the account is
+     * created unlocked (the original Block 2 behaviour).
+     */
+    public function register(string $username, string $password, ?string $email = null): int
     {
         $username = strtolower(trim($username));
         Validation::username($username);
         Validation::password($password);
+        if ($email !== null) {
+            Validation::email($email);
+        }
 
         $hash = $this->hashPassword($password);
 
@@ -39,13 +49,25 @@ final class AccountService
             throw new ConflictException("Username '{$username}' is already taken.");
         }
 
+        if ($email !== null) {
+            $emailTaken = $this->db->run(
+                'gf_ls',
+                'SELECT 1 FROM web_account WHERE email = :e',
+                [':e' => $email],
+            )->fetchColumn();
+            if ($emailTaken !== false) {
+                throw new ConflictException('That email address is already registered.');
+            }
+        }
+
         // 1) gf_ms.tb_user — the PK on mid makes this the uniqueness gate.
+        //    byauthority 255 = locked (pending email confirmation).
         try {
             $this->db->run(
                 'gf_ms',
-                'INSERT INTO tb_user (mid, password, pwd, pvalues) '
-                . 'VALUES (:m, :pw, :pw, 99999)',
-                [':m' => $username, ':pw' => $hash],
+                'INSERT INTO tb_user (mid, password, pwd, pvalues, byauthority) '
+                . 'VALUES (:m, :pw, :pw, 99999, :auth)',
+                [':m' => $username, ':pw' => $hash, ':auth' => $email !== null ? 255 : 0],
             );
         } catch (\PDOException $e) {
             if ($e->getCode() === '23505') {
@@ -54,10 +76,10 @@ final class AccountService
             throw new DatabaseException('Failed to create account.', 0, $e);
         }
 
-        // 2) gf_ls.accounts — allocate id under an exclusive lock to avoid the
-        //    COUNT()-based race the legacy PHP had. Compensate on failure.
+        // 2) gf_ls — allocate the id under an exclusive lock, write accounts
+        //    and (when registering with email) web_account, atomically.
         try {
-            return $this->db->transaction('gf_ls', function (\PDO $pdo) use ($username): int {
+            return $this->db->transaction('gf_ls', function (\PDO $pdo) use ($username, $email): int {
                 $pdo->exec('LOCK TABLE accounts IN EXCLUSIVE MODE');
                 $nextId = (int) $pdo
                     ->query('SELECT COALESCE(MAX(id), 0) + 1 FROM accounts')
@@ -67,6 +89,13 @@ final class AccountService
                     . "VALUES (:id, :u, '', :u, 0)"
                 );
                 $stmt->execute([':id' => $nextId, ':u' => $username]);
+
+                if ($email !== null) {
+                    $web = $pdo->prepare(
+                        'INSERT INTO web_account (account_id, email) VALUES (:id, :e)'
+                    );
+                    $web->execute([':id' => $nextId, ':e' => $email]);
+                }
 
                 return $nextId;
             });
@@ -141,6 +170,79 @@ final class AccountService
         if ($stmt->rowCount() === 0) {
             throw new ConflictException("Account '{$username}' not found.");
         }
+    }
+
+    /** Return the accounts.id for an email address, or null if unknown. */
+    public function findByEmail(string $email): ?int
+    {
+        $id = $this->db->run(
+            'gf_ls',
+            'SELECT account_id FROM web_account WHERE email = :e',
+            [':e' => $email],
+        )->fetchColumn();
+
+        return $id === false ? null : (int) $id;
+    }
+
+    /** Mark an account's email verified and unlock it for game login. */
+    public function confirmEmail(int $accountId): void
+    {
+        $this->db->run(
+            'gf_ls',
+            'UPDATE web_account SET email_verified = true WHERE account_id = :id',
+            [':id' => $accountId],
+        );
+
+        $username = $this->db->run(
+            'gf_ls',
+            'SELECT username FROM accounts WHERE id = :id',
+            [':id' => $accountId],
+        )->fetchColumn();
+        if ($username !== false) {
+            $this->db->run(
+                'gf_ms',
+                'UPDATE tb_user SET byauthority = 0 WHERE mid = :m',
+                [':m' => strtolower((string) $username)],
+            );
+        }
+    }
+
+    /** Set a new password for an account identified by id. */
+    public function changePasswordForAccount(int $accountId, string $newPassword): void
+    {
+        $username = $this->db->run(
+            'gf_ls',
+            'SELECT username FROM accounts WHERE id = :id',
+            [':id' => $accountId],
+        )->fetchColumn();
+        if ($username === false) {
+            throw new ConflictException('Account not found.');
+        }
+
+        $this->changePassword((string) $username, $newPassword);
+    }
+
+    /**
+     * Portal-side account metadata (email + verification flag), or null.
+     *
+     * @return array{email: ?string, email_verified: bool}|null
+     */
+    public function webAccount(int $accountId): ?array
+    {
+        $row = $this->db->run(
+            'gf_ls',
+            'SELECT email, email_verified FROM web_account WHERE account_id = :id',
+            [':id' => $accountId],
+        )->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return [
+            'email' => $row['email'] !== null ? (string) $row['email'] : null,
+            'email_verified' => in_array($row['email_verified'], [true, 't', '1', 1], true),
+        ];
     }
 
     /**
