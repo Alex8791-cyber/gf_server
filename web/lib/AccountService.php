@@ -172,6 +172,18 @@ final class AccountService
         }
     }
 
+    /** Return the accounts.id for a username, or null if unknown. */
+    public function findByUsername(string $username): ?int
+    {
+        $id = $this->db->run(
+            'gf_ls',
+            'SELECT id FROM accounts WHERE username = :u',
+            [':u' => strtolower(trim($username))],
+        )->fetchColumn();
+
+        return $id === false ? null : (int) $id;
+    }
+
     /** Return the accounts.id for an email address, or null if unknown. */
     public function findByEmail(string $email): ?int
     {
