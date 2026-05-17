@@ -210,10 +210,37 @@ setup_web_server() {
   usermod -aG "$GF_GROUP" www-data
   chmod 750 "$GF_ROOT"
 
-  # Discover the PHP-FPM socket rather than hard-coding the PHP version.
-  local php_fpm_sock
-  php_fpm_sock="$(ls /run/php/php*-fpm.sock 2>/dev/null | head -1)"
-  [ -n "$php_fpm_sock" ] || die "PHP-FPM socket not found under /run/php/."
+  # Dedicated PHP-FPM pool so the portal process receives the GF_* env vars.
+  local php_ver pool_sock
+  php_ver="$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;')"
+  [ -n "$php_ver" ] || die "Could not determine the PHP version."
+  pool_sock="/run/php/php-fpm-gfserver.sock"
+
+  log "Writing the gfserver PHP-FPM pool..."
+  cat > "/etc/php/${php_ver}/fpm/pool.d/gfserver.conf" <<POOL
+[gfserver]
+user = www-data
+group = www-data
+listen = ${pool_sock}
+listen.owner = www-data
+listen.group = www-data
+pm = dynamic
+pm.max_children = 10
+pm.start_servers = 2
+pm.min_spare_servers = 1
+pm.max_spare_servers = 4
+clear_env = yes
+env[GF_DB_HOST] = 127.0.0.1
+env[GF_DB_PORT] = 5432
+env[GF_DB_USER] = gf_web
+env[GF_DB_PASSWORD] = ${WEB_DB_PASSWORD}
+env[GF_MAIL_FROM] = ${GF_MAIL_FROM:-noreply@localhost}
+env[GF_MAIL_FROM_NAME] = ${GF_MAIL_FROM_NAME:-Grand Fantasia}
+env[GF_DOWNLOAD_URL] = ${GF_DOWNLOAD_URL:-}
+POOL
+  # The pool file holds the gf_web DB password — keep it off world-read.
+  chmod 640 "/etc/php/${php_ver}/fpm/pool.d/gfserver.conf"
+  systemctl restart "php${php_ver}-fpm"
 
   log "Writing the Apache virtual host..."
   cat > /etc/apache2/sites-available/gfserver.conf <<APACHE
@@ -229,7 +256,7 @@ setup_web_server() {
     </Directory>
 
     <FilesMatch \.php\$>
-        SetHandler "proxy:unix:${php_fpm_sock}|fcgi://localhost"
+        SetHandler "proxy:unix:${pool_sock}|fcgi://localhost"
     </FilesMatch>
 
     ErrorLog \${APACHE_LOG_DIR}/gfserver-error.log
