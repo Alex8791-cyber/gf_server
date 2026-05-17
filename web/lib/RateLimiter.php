@@ -17,10 +17,13 @@ final class RateLimiter
     /** Record one attempt from $ip. */
     public function record(string $ip, bool $success): void
     {
+        // $success is a typed bool, so the literal is injection-safe; a SQL
+        // boolean literal avoids relying on PDO string-to-boolean coercion.
         $this->db->run(
             'gf_ls',
-            'INSERT INTO web_login_attempt (ip, success) VALUES (:ip, :s)',
-            [':ip' => $ip, ':s' => $success ? 'true' : 'false'],
+            'INSERT INTO web_login_attempt (ip, success) VALUES (:ip, '
+            . ($success ? 'true' : 'false') . ')',
+            [':ip' => $ip],
         );
     }
 
