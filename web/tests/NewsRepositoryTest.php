@@ -66,4 +66,44 @@ final class NewsRepositoryTest extends DbTestCase
         $this->assertNull($this->news->find($draftId), 'drafts are not findable');
         $this->assertNull($this->news->find(999999999), 'missing id returns null');
     }
+
+    public function testAdminCreateUpdateAndFindAny(): void
+    {
+        $id = $this->news->create('Admin draft', 'draft body', null);
+        $this->created[] = $id;
+
+        $found = $this->news->findAny($id);
+        $this->assertNotNull($found);
+        $this->assertSame('Admin draft', $found['title']);
+        $this->assertNull($found['published_at'], 'created news starts unpublished');
+
+        $this->news->update($id, 'Edited title', 'edited body');
+        $this->assertSame('Edited title', $this->news->findAny($id)['title']);
+    }
+
+    public function testAdminPublishAndUnpublish(): void
+    {
+        $id = $this->news->create('Publish me', 'body', null);
+        $this->created[] = $id;
+
+        $this->news->setPublished($id, true);
+        $this->assertNotNull($this->news->findAny($id)['published_at']);
+        $this->assertNotNull($this->news->find($id), 'published news is publicly visible');
+
+        $this->news->setPublished($id, false);
+        $this->assertNull($this->news->findAny($id)['published_at']);
+        $this->assertNull($this->news->find($id), 'unpublished news is hidden again');
+    }
+
+    public function testAdminListIncludesDraftsAndDeleteRemoves(): void
+    {
+        $id = $this->news->create('Listed draft', 'body', null);
+        $this->created[] = $id;
+
+        $ids = array_column($this->news->allForAdmin(), 'id');
+        $this->assertContains($id, $ids, 'allForAdmin includes drafts');
+
+        $this->news->delete($id);
+        $this->assertNull($this->news->findAny($id));
+    }
 }
