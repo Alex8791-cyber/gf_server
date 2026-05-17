@@ -44,8 +44,20 @@ abstract class DbTestCase extends TestCase
         $this->adminPdo('gf_ms')
             ->prepare('DELETE FROM tb_user WHERE mid = :m')
             ->execute([':m' => $username]);
-        $this->adminPdo('gf_ls')
-            ->prepare('DELETE FROM accounts WHERE username = :u')
-            ->execute([':u' => $username]);
+
+        $ls = $this->adminPdo('gf_ls');
+        $lookup = $ls->prepare('SELECT id FROM accounts WHERE username = :u');
+        $lookup->execute([':u' => $username]);
+        $accountId = $lookup->fetchColumn();
+
+        if ($accountId !== false) {
+            // These tables FK-reference accounts.id, so clear them first.
+            foreach (['web_token', 'web_account', 'web_admin'] as $table) {
+                $ls->prepare("DELETE FROM {$table} WHERE account_id = :id")
+                    ->execute([':id' => $accountId]);
+            }
+            $ls->prepare('DELETE FROM accounts WHERE id = :id')
+                ->execute([':id' => $accountId]);
+        }
     }
 }
