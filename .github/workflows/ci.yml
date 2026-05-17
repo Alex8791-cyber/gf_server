@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  deploy-checks:
+    name: Deploy toolchain checks
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bash syntax check
+        run: |
+          set -e
+          for s in deploy/install.sh deploy/gfctl deploy/gf-backup.sh \
+                   deploy/ip-patch.sh deploy/lib/common.sh deploy/tests/*.sh; do
+            bash -n "$s"
+            echo "ok: $s"
+          done
+
+      - name: ShellCheck
+        run: |
+          shellcheck --version
+          shellcheck -x --severity=warning \
+            deploy/install.sh deploy/gfctl deploy/gf-backup.sh \
+            deploy/ip-patch.sh deploy/lib/common.sh deploy/tests/*.sh
+
+      - name: systemd unit verify
+        run: |
+          set -e
+          # Stub the binaries the units reference so `systemd-analyze verify`
+          # is deterministic (no false "executable path" failures).
+          sudo mkdir -p /opt/gfserver/deploy
+          for d in TicketServer GatewayServer LoginServer MissionServer WorldServer ZoneServer; do
+            sudo mkdir -p "/opt/gfserver/$d"
+            printf '#!/bin/sh\n' | sudo tee "/opt/gfserver/$d/$d" >/dev/null
+            sudo chmod 755 "/opt/gfserver/$d/$d"
+          done
+          sudo install -m 755 deploy/gf-backup.sh /opt/gfserver/deploy/gf-backup.sh
+          for u in deploy/systemd/*; do
+            echo "== verify $u =="
+            systemd-analyze verify "$u"
+          done
+
+      - name: IP-patch unit test
+        run: bash deploy/tests/test-ip-patch.sh
