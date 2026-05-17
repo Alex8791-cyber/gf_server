@@ -12,3 +12,7 @@ logs/
 # OS noise.
 .DS_Store
 Thumbs.db
+
+# PHP / Composer (web backend).
+web/vendor/
+web/composer.lock

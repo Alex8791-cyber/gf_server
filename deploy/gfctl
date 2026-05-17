@@ -9,13 +9,14 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 usage() {
   cat >&2 <<EOF
-Usage: gfctl {start|stop|restart|status|backup|restore <folder>}
+Usage: gfctl {start|stop|restart|status|backup|restore <folder>|migrate}
   start    Start all game servers
   stop     Stop all game servers
   restart  Restart all game servers
   status   Show systemd status of every component
   backup   Run a database backup now
   restore  Restore a backup folder (e.g. restore 2026-05-16_04-30-00)
+  migrate  Apply pending database migrations
 EOF
   exit 1
 }
@@ -54,6 +55,7 @@ case "${1:-}" in
   restart) require_root; systemctl restart gfserver.target; log "Server restarted." ;;
   status)  cmd_status ;;
   backup)  require_root; systemctl start gf-backup.service; log "Backup finished — see ${GF_ROOT}/backup/." ;;
+  migrate) require_root; "${SCRIPT_DIR}/migrate.sh" ;;
   restore) require_root; shift; cmd_restore "${1:-}" ;;
   *)       usage ;;
 esac
