@@ -122,4 +122,36 @@ final class AccountServiceTest extends DbTestCase
         $this->expectException(ConflictException::class);
         $this->service->changePassword('tnosuchaccount', 'whatever-password');
     }
+
+    public function testAuthenticateAcceptsCorrectCredentials(): void
+    {
+        $username = $this->uniqueName();
+        $id = $this->service->register($username, 'auth-good-pw');
+
+        $this->assertSame($id, $this->service->authenticate($username, 'auth-good-pw'));
+        $this->assertNull($this->service->authenticate($username, 'wrong-pw'));
+        $this->assertNull($this->service->authenticate('tno_such_acct', 'auth-good-pw'));
+    }
+
+    public function testSetAccountLockedBlocksAndUnblocksGameLogin(): void
+    {
+        $username = $this->uniqueName();
+        $this->service->register($username, 'lock-test-pw');
+
+        $this->service->setAccountLocked($username, true);
+        $locked = $this->db->run(
+            'gf_ms',
+            "SELECT (account_login(:u, :p, '127.0.0.1')).nRet",
+            [':u' => $username, ':p' => 'lock-test-pw'],
+        )->fetchColumn();
+        $this->assertSame(5, (int) $locked, 'locked account is rejected (nRet=5)');
+
+        $this->service->setAccountLocked($username, false);
+        $open = $this->db->run(
+            'gf_ms',
+            "SELECT (account_login(:u, :p, '127.0.0.1')).nRet",
+            [':u' => $username, ':p' => 'lock-test-pw'],
+        )->fetchColumn();
+        $this->assertSame(1, (int) $open, 'unlocked account is accepted (nRet=1)');
+    }
 }

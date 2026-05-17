@@ -100,6 +100,50 @@ final class AccountService
     }
 
     /**
+     * Verify a username/password pair against the stored bcrypt hash.
+     * Returns the accounts.id on success, or null on any failure.
+     */
+    public function authenticate(string $username, string $password): ?int
+    {
+        $username = strtolower(trim($username));
+
+        $ok = $this->db->run(
+            'gf_ms',
+            'SELECT 1 FROM tb_user WHERE mid = :m AND pwd = crypt(:pw, pwd)',
+            [':m' => $username, ':pw' => $password],
+        )->fetchColumn();
+        if ($ok === false) {
+            return null;
+        }
+
+        $id = $this->db->run(
+            'gf_ls',
+            'SELECT id FROM accounts WHERE username = :u',
+            [':u' => $username],
+        )->fetchColumn();
+
+        return $id === false ? null : (int) $id;
+    }
+
+    /**
+     * Lock or unlock an account for game login by setting tb_user.byauthority
+     * (255 = locked, 0 = open). Used by the email-confirmation lifecycle.
+     */
+    public function setAccountLocked(string $username, bool $locked): void
+    {
+        $username = strtolower(trim($username));
+
+        $stmt = $this->db->run(
+            'gf_ms',
+            'UPDATE tb_user SET byauthority = :a WHERE mid = :m',
+            [':a' => $locked ? 255 : 0, ':m' => $username],
+        );
+        if ($stmt->rowCount() === 0) {
+            throw new ConflictException("Account '{$username}' not found.");
+        }
+    }
+
+    /**
      * Hash a password with bcrypt via PostgreSQL's pgcrypto.
      *
      * The hash MUST be produced by pgcrypto, not PHP's password_hash(): the
