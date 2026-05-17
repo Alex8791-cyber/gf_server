@@ -17,6 +17,7 @@ Usage: gfctl {start|stop|restart|status|backup|restore <folder>|migrate}
   backup   Run a database backup now
   restore  Restore a backup folder (e.g. restore 2026-05-16_04-30-00)
   migrate  Apply pending database migrations
+  add-admin  Grant portal admin to an account (add-admin <username>)
 EOF
   exit 1
 }
@@ -49,6 +50,17 @@ cmd_restore() {
   log "Restore complete."
 }
 
+cmd_add_admin() {
+  local username="${1:-}"
+  [ -n "$username" ] || die "add-admin needs a username."
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -q -d gf_ls <<SQL
+INSERT INTO web_admin (account_id)
+SELECT id FROM accounts WHERE username = lower('${username}')
+ON CONFLICT (account_id) DO NOTHING;
+SQL
+  log "Portal admin granted to '${username}' (if the account exists)."
+}
+
 case "${1:-}" in
   start)   require_root; systemctl start gfserver.target;   log "Server started." ;;
   stop)    require_root; systemctl stop gfserver.target;    log "Server stopped." ;;
@@ -56,6 +68,7 @@ case "${1:-}" in
   status)  cmd_status ;;
   backup)  require_root; systemctl start gf-backup.service; log "Backup finished — see ${GF_ROOT}/backup/." ;;
   migrate) require_root; "${SCRIPT_DIR}/migrate.sh" ;;
+  add-admin) require_root; shift; cmd_add_admin "${1:-}" ;;
   restore) require_root; shift; cmd_restore "${1:-}" ;;
   *)       usage ;;
 esac

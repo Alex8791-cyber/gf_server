@@ -11,7 +11,11 @@
         "phpunit/phpunit": "^11"
     },
     "autoload": {
-        "psr-4": { "GfServer\\": "lib/" }
+        "psr-4": {
+            "GfServer\\": "lib/",
+            "GfServer\\App\\": "app/"
+        },
+        "files": [ "app/helpers.php" ]
     },
     "autoload-dev": {
         "psr-4": { "GfServer\\Tests\\": "tests/" }
