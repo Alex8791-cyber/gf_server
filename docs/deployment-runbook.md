@@ -91,3 +91,28 @@ Inspect a component's log with `journalctl -u gf-zone -f`.
    `sudo deploy/gfctl add-admin <username>`
 
 Verify: browse to the domain — the portal home page should load.
+
+## Forum (Block 3b)
+
+`install.sh` also installs phpBB 3.3 under `/opt/gfserver/phpbb`, served on
+`FORUM_DOMAIN`. Single sign-on is provided by the `gfserver/sso` extension —
+players log in with their game account.
+
+1. Before running `install.sh`, set `FORUM_DOMAIN`, `FORUM_DB_PASSWORD` and
+   the `FORUM_ADMIN_*` values in `deploy/gfserver.env`, and point the forum
+   subdomain's DNS A record at the VPS.
+2. Confirm `PHPBB_VERSION` in `install.sh` is the current phpBB 3.3.x security
+   release before installing.
+3. After install, enable HTTPS for the forum:
+   `sudo certbot --apache -d <your-forum-domain>`
+4. Verify SSO: open the forum, log in with an existing game account — the
+   phpBB user is created automatically on first login.
+5. In the phpBB ACP, disable the "forgot password" / change-password features
+   so account and password management stay with the portal. (`install.sh`
+   already closes registration via `require_activation`; phpBB 3.3 has no
+   single config toggle for the password-reset UI, so this is an ACP step.)
+
+**phpBB updates:** the phpBB framework under `/opt/gfserver/phpbb` is not part
+of this repository. Apply phpBB security releases manually (download the new
+version, follow phpBB's update procedure); the `gfserver/sso` extension is
+re-deployed from the repo by re-running `install.sh`.

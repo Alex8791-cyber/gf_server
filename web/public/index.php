@@ -46,11 +46,16 @@ $session->start();
 
 $view = new View(__DIR__ . '/../templates');
 
-// Make the logged-in user's name available to every template (the nav).
+// Make the logged-in user's name and the forum URL available to every
+// template (the nav).
 $navUsername = $session->get(Auth::SESSION_USERNAME);
+$forumDomain = getenv('FORUM_DOMAIN');
 $view->share([
     'navLoggedIn' => is_string($navUsername) && $navUsername !== '',
     'navUsername' => is_string($navUsername) ? $navUsername : '',
+    'forumUrl' => ($forumDomain !== false && $forumDomain !== '')
+        ? 'https://' . $forumDomain
+        : null,
 ]);
 
 $router = new Router();

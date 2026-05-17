@@ -15,6 +15,9 @@
             <a href="/downloads">Download</a>
             <a href="/status">Status</a>
             <a href="/rankings">Rankings</a>
+            <?php if (!empty($forumUrl)): ?>
+                <a href="<?= e($forumUrl) ?>">Forum</a>
+            <?php endif; ?>
             <?php if (!empty($navLoggedIn)): ?>
                 <a href="/account"><?= e($navUsername ?? '') ?></a>
             <?php else: ?>

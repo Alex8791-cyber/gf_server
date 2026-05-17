@@ -104,6 +104,12 @@ jobs:
         working-directory: web
         run: composer install --no-interaction --no-progress
 
+      - name: Syntax-check the phpBB SSO extension
+        run: |
+          for f in $(find forum/ext -name '*.php'); do
+            php -l "$f"
+          done
+
       - name: Run PHPUnit
         working-directory: web
         env:

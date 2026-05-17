@@ -1,0 +1,11 @@
+services:
+    auth.provider.gfserver:
+        class: gfserver\sso\auth\provider\gfserver
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@user'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+        tags:
+            - { name: auth.provider }
