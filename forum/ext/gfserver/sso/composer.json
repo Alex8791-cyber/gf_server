@@ -1,0 +1,15 @@
+{
+    "name": "gfserver/sso",
+    "type": "phpbb-extension",
+    "description": "Single sign-on for phpBB against the gf_server game accounts.",
+    "license": "GPL-2.0-only",
+    "require": {
+        "php": ">=7.4"
+    },
+    "extra": {
+        "display-name": "gf_server SSO",
+        "soft-require": {
+            "phpbb/phpbb": ">=3.3.0,<4.0.0@dev"
+        }
+    }
+}
