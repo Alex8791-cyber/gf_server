@@ -37,19 +37,23 @@ final class AuthTest extends DbTestCase
     public function testIsAdminReflectsWebAdminMembership(): void
     {
         $admin = $this->adminPdo('gf_ls');
+        // web_admin.account_id has a foreign key to accounts.id, so the
+        // account row must exist before the web_admin row.
+        $admin->exec("INSERT INTO accounts (id, username) VALUES (2100001, 'tauthadmin')");
         $admin->exec('INSERT INTO web_admin (account_id) VALUES (2100001)');
 
         try {
             $session = new Session();
             $auth = new Auth($session, $this->db);
 
-            $auth->login(2100001, 'theadmin');
+            $auth->login(2100001, 'tauthadmin');
             $this->assertTrue($auth->isAdmin());
 
             $auth->login(2100002, 'notadmin');
             $this->assertFalse($auth->isAdmin());
         } finally {
             $admin->exec('DELETE FROM web_admin WHERE account_id = 2100001');
+            $admin->exec('DELETE FROM accounts WHERE id = 2100001');
         }
     }
 }
