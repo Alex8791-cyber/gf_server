@@ -73,3 +73,21 @@ Inspect a component's log with `journalctl -u gf-zone -f`.
   A 64-bit Ubuntu kernel normally runs static 32-bit ELF directly. If it does
   not, enable multiarch:
   `sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install -y libc6:i386`.
+
+## Portal (Block 3a)
+
+`install.sh` also installs Apache + PHP-FPM and serves the portal from
+`/opt/gfserver/web/public` on port 80.
+
+1. Point your portal domain's DNS A record at the VPS, and set
+   `PORTAL_DOMAIN`, `ADMIN_ACCOUNT` and the `GF_MAIL_FROM*` values in
+   `deploy/gfserver.env` before running `install.sh`.
+2. After install, enable HTTPS:
+   `sudo certbot --apache -d <your-portal-domain>`
+   certbot adds the TLS virtual host and the HTTP-to-HTTPS redirect.
+3. Configure an SMTP relay for outgoing mail (account confirmation and
+   password reset). Until a relay is configured, mail sending will fail.
+4. Grant additional portal admins at any time:
+   `sudo deploy/gfctl add-admin <username>`
+
+Verify: browse to the domain — the portal home page should load.

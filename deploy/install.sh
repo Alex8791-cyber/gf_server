@@ -181,6 +181,20 @@ run_migrations() {
   "${SCRIPT_DIR}/migrate.sh"
 }
 
+# --- 5c2. First portal admin -----------------------------------------------
+bootstrap_admin() {
+  if [ -z "${ADMIN_ACCOUNT:-}" ]; then
+    log "ADMIN_ACCOUNT not set — skipping portal admin bootstrap."
+    return
+  fi
+  log "Granting portal admin to '${ADMIN_ACCOUNT}'..."
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -q -d gf_ls <<SQL
+INSERT INTO web_admin (account_id)
+SELECT id FROM accounts WHERE username = lower('${ADMIN_ACCOUNT}')
+ON CONFLICT (account_id) DO NOTHING;
+SQL
+}
+
 # --- 5d. Web server (Apache + PHP-FPM) -------------------------------------
 setup_web_server() {
   log "Installing Apache and PHP-FPM..."
@@ -304,6 +318,7 @@ main() {
   configure_postgres
   setup_web_role
   run_migrations
+  bootstrap_admin
   setup_web_server
   render_configs
   patch_binaries
