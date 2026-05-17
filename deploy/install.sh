@@ -25,6 +25,9 @@ preflight() {
   if [ -n "${DB_PASSWORD:-}" ] && printf '%s' "$DB_PASSWORD" | grep -q '[^A-Za-z0-9._-]'; then
     die "DB_PASSWORD may only contain A-Z a-z 0-9 . _ - (edit gfserver.env)."
   fi
+  if [ -n "${WEB_DB_PASSWORD:-}" ] && printf '%s' "$WEB_DB_PASSWORD" | grep -q '[^A-Za-z0-9._-]'; then
+    die "WEB_DB_PASSWORD may only contain A-Z a-z 0-9 . _ - (edit gfserver.env)."
+  fi
   log "Preflight OK — installing to ${GF_ROOT}."
 }
 
@@ -147,6 +150,37 @@ SQL
     || warn "serverstatus update skipped"
 }
 
+# --- 5b. Web-backend DB role -----------------------------------------------
+setup_web_role() {
+  if [ -z "${WEB_DB_PASSWORD:-}" ]; then
+    WEB_DB_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | head -c 28)"
+    log "Generated a random gf_web password and stored it in gfserver.env."
+    if grep -q '^WEB_DB_PASSWORD=' "${SCRIPT_DIR}/gfserver.env"; then
+      sed -i "s|^WEB_DB_PASSWORD=.*|WEB_DB_PASSWORD=${WEB_DB_PASSWORD}|" "${SCRIPT_DIR}/gfserver.env"
+    else
+      printf 'WEB_DB_PASSWORD=%s\n' "$WEB_DB_PASSWORD" >> "${SCRIPT_DIR}/gfserver.env"
+    fi
+  fi
+  log "Creating/updating the gf_web role..."
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -q <<SQL
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gf_web') THEN
+    CREATE ROLE gf_web LOGIN PASSWORD '${WEB_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE gf_web LOGIN PASSWORD '${WEB_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+SQL
+}
+
+# --- 5c. Database migrations -----------------------------------------------
+run_migrations() {
+  log "Applying database migrations..."
+  "${SCRIPT_DIR}/migrate.sh"
+}
+
 # --- 6. Render component setup.ini files -----------------------------------
 render_configs() {
   log "Writing database credentials into component setup.ini files..."
@@ -222,6 +256,8 @@ main() {
   setup_user
   ensure_32bit_support
   configure_postgres
+  setup_web_role
+  run_migrations
   render_configs
   patch_binaries
   install_systemd
