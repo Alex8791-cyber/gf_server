@@ -1,0 +1,14 @@
+# Real deployment config — contains the public IP and DB password.
+deploy/gfserver.env
+
+# Generated / patched artifacts.
+*.bak
+backup/
+
+# Server runtime logs.
+logs/
+*.log
+
+# OS noise.
+.DS_Store
+Thumbs.db

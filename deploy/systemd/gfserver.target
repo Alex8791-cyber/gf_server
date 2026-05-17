@@ -1,0 +1,7 @@
+[Unit]
+Description=Grand Fantasia Server (all components)
+After=postgresql.service
+Wants=gf-ticket.service gf-gateway.service gf-login.service gf-mission.service gf-world.service gf-zone.service
+
+[Install]
+WantedBy=multi-user.target

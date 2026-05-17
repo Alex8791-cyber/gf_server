@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Day-to-day management for the gf_server game servers.
+# Usage: gfctl {start|stop|restart|status|backup|restore <folder>}
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat >&2 <<EOF
+Usage: gfctl {start|stop|restart|status|backup|restore <folder>}
+  start    Start all game servers
+  stop     Stop all game servers
+  restart  Restart all game servers
+  status   Show systemd status of every component
+  backup   Run a database backup now
+  restore  Restore a backup folder (e.g. restore 2026-05-16_04-30-00)
+EOF
+  exit 1
+}
+
+cmd_status() {
+  systemctl --no-pager --lines=0 status \
+    gf-ticket gf-gateway gf-login gf-mission gf-world gf-zone || true
+}
+
+cmd_restore() {
+  local folder="${1:-}"
+  [ -n "$folder" ] || die "restore needs a backup folder name."
+  local dir="${GF_ROOT}/backup/${folder}"
+  [ -d "$dir" ] || die "Backup folder not found: $dir"
+  local db
+  for db in gf_gs gf_ls gf_ms; do
+    [ -f "${dir}/${db}.sql" ] || die "Missing ${db}.sql in ${dir}"
+  done
+  warn "This will OVERWRITE databases gf_gs, gf_ls, gf_ms from ${folder}."
+  read -rp "Type 'yes' to continue: " confirm
+  [ "$confirm" = "yes" ] || die "Aborted."
+  # Restore as the postgres superuser -- the dumps recreate objects owned by
+  # 'postgres' and superuser-only functions, which gf_app cannot load.
+  for db in gf_gs gf_ls gf_ms; do
+    log "Restoring ${db}..."
+    sudo -u postgres psql -q -c "DROP DATABASE IF EXISTS ${db};"
+    sudo -u postgres psql -q -c "CREATE DATABASE ${db} ENCODING 'UTF8' TEMPLATE template0;"
+    sudo -u postgres psql -v ON_ERROR_STOP=1 -q -d "$db" -f "${dir}/${db}.sql"
+  done
+  log "Restore complete."
+}
+
+case "${1:-}" in
+  start)   require_root; systemctl start gfserver.target;   log "Server started." ;;
+  stop)    require_root; systemctl stop gfserver.target;    log "Server stopped." ;;
+  restart) require_root; systemctl restart gfserver.target; log "Server restarted." ;;
+  status)  cmd_status ;;
+  backup)  require_root; systemctl start gf-backup.service; log "Backup finished — see ${GF_ROOT}/backup/." ;;
+  restore) require_root; shift; cmd_restore "${1:-}" ;;
+  *)       usage ;;
+esac

@@ -1,0 +1,22 @@
+[Unit]
+Description=Grand Fantasia Zone Server
+After=network-online.target postgresql.service gf-world.service
+Wants=network-online.target
+PartOf=gfserver.target
+
+[Service]
+Type=simple
+User=gfserver
+Group=gfserver
+WorkingDirectory=/opt/gfserver/ZoneServer
+ExecStart=/opt/gfserver/ZoneServer/ZoneServer
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/opt/gfserver
+
+[Install]
+WantedBy=gfserver.target
