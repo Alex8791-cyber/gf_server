@@ -28,6 +28,9 @@ preflight() {
   if [ -n "${WEB_DB_PASSWORD:-}" ] && printf '%s' "$WEB_DB_PASSWORD" | grep -q '[^A-Za-z0-9._-]'; then
     die "WEB_DB_PASSWORD may only contain A-Z a-z 0-9 . _ - (edit gfserver.env)."
   fi
+  if [ -n "${FORUM_DB_PASSWORD:-}" ] && printf '%s' "$FORUM_DB_PASSWORD" | grep -q '[^A-Za-z0-9._-]'; then
+    die "FORUM_DB_PASSWORD may only contain A-Z a-z 0-9 . _ - (edit gfserver.env)."
+  fi
   log "Preflight OK — installing to ${GF_ROOT}."
 }
 
@@ -238,6 +241,7 @@ env[GF_MAIL_FROM] = ${GF_MAIL_FROM:-noreply@localhost}
 env[GF_MAIL_FROM_NAME] = ${GF_MAIL_FROM_NAME:-Grand Fantasia}
 env[GF_DOWNLOAD_URL] = ${GF_DOWNLOAD_URL:-}
 env[PORTAL_DOMAIN] = ${PORTAL_DOMAIN:-localhost}
+env[FORUM_DOMAIN] = ${FORUM_DOMAIN:-localhost}
 POOL
   # The pool file holds the gf_web DB password — keep it off world-read.
   chmod 640 "/etc/php/${php_ver}/fpm/pool.d/gfserver.conf"
