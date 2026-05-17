@@ -3,14 +3,19 @@
 declare(strict_types=1);
 
 use GfServer\AccountService;
+use GfServer\AdminService;
 use GfServer\App\Auth;
+use GfServer\App\Controller\AccountAdminController;
 use GfServer\App\Controller\AccountController;
 use GfServer\App\Controller\ConfirmController;
+use GfServer\App\Controller\DashboardController;
 use GfServer\App\Controller\DownloadsController;
 use GfServer\App\Controller\HomeController;
 use GfServer\App\Controller\LoginController;
+use GfServer\App\Controller\NewsAdminController;
 use GfServer\App\Controller\NewsController;
 use GfServer\App\Controller\PasswordResetController;
+use GfServer\App\Controller\PlayerAdminController;
 use GfServer\App\Controller\RankingController;
 use GfServer\App\Controller\RegisterController;
 use GfServer\App\Controller\StatusController;
@@ -67,6 +72,22 @@ $router->add('GET', '/forgot', 'PasswordResetController', 'showRequestForm');
 $router->add('POST', '/forgot', 'PasswordResetController', 'submitRequest');
 $router->add('GET', '/reset', 'PasswordResetController', 'showResetForm');
 $router->add('POST', '/reset', 'PasswordResetController', 'submitReset');
+$router->add('GET', '/admin', 'DashboardController', 'index');
+$router->add('GET', '/admin/news', 'NewsAdminController', 'index');
+$router->add('GET', '/admin/news/new', 'NewsAdminController', 'createForm');
+$router->add('POST', '/admin/news/new', 'NewsAdminController', 'create');
+$router->add('GET', '/admin/news/edit', 'NewsAdminController', 'editForm');
+$router->add('POST', '/admin/news/edit', 'NewsAdminController', 'update');
+$router->add('POST', '/admin/news/publish', 'NewsAdminController', 'togglePublish');
+$router->add('POST', '/admin/news/delete', 'NewsAdminController', 'delete');
+$router->add('GET', '/admin/players', 'PlayerAdminController', 'index');
+$router->add('POST', '/admin/players/gm', 'PlayerAdminController', 'setGm');
+$router->add('POST', '/admin/players/rename', 'PlayerAdminController', 'renamePlayer');
+$router->add('POST', '/admin/players/sprite', 'PlayerAdminController', 'renameSprite');
+$router->add('GET', '/admin/accounts', 'AccountAdminController', 'index');
+$router->add('POST', '/admin/accounts/password', 'AccountAdminController', 'resetPassword');
+$router->add('POST', '/admin/accounts/lock', 'AccountAdminController', 'setLocked');
+$router->add('POST', '/admin/accounts/resend', 'AccountAdminController', 'resendConfirmation');
 
 // Lazily open the database only when a controller needs it.
 $db = null;
@@ -123,6 +144,32 @@ $makeController = static function (string $name) use ($view, $session, $getDb): 
             new TokenService($getDb()),
             SmtpMailer::fromEnv(),
             new RateLimiter($getDb()),
+        ),
+        'DashboardController' => new DashboardController(
+            $view,
+            $session,
+            new Auth($session, $getDb()),
+            new ServerStatus($getDb()),
+        ),
+        'NewsAdminController' => new NewsAdminController(
+            $view,
+            $session,
+            new Auth($session, $getDb()),
+            new NewsRepository($getDb()),
+        ),
+        'PlayerAdminController' => new PlayerAdminController(
+            $view,
+            $session,
+            new Auth($session, $getDb()),
+            new AdminService($getDb()),
+        ),
+        'AccountAdminController' => new AccountAdminController(
+            $view,
+            $session,
+            new Auth($session, $getDb()),
+            new AccountService($getDb()),
+            new TokenService($getDb()),
+            SmtpMailer::fromEnv(),
         ),
         default => throw new \RuntimeException("Unknown controller: {$name}"),
     };
