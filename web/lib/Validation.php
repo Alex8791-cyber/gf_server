@@ -31,6 +31,14 @@ final class Validation
         }
     }
 
+    /** Email address: must be syntactically valid and at most 254 chars. */
+    public static function email(string $email): void
+    {
+        if (filter_var($email, FILTER_VALIDATE_EMAIL) === false || strlen($email) > 254) {
+            throw new ValidationException('Please enter a valid email address.');
+        }
+    }
+
     /** Player or sprite name: 4-16 chars, no whitespace. */
     public static function characterName(string $name): void
     {
