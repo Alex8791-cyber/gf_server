@@ -107,6 +107,10 @@ players log in with their game account.
    `sudo certbot --apache -d <your-forum-domain>`
 4. Verify SSO: open the forum, log in with an existing game account — the
    phpBB user is created automatically on first login.
+5. In the phpBB ACP, disable the "forgot password" / change-password features
+   so account and password management stay with the portal. (`install.sh`
+   already closes registration via `require_activation`; phpBB 3.3 has no
+   single config toggle for the password-reset UI, so this is an ACP step.)
 
 **phpBB updates:** the phpBB framework under `/opt/gfserver/phpbb` is not part
 of this repository. Apply phpBB security releases manually (download the new

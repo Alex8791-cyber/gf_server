@@ -168,8 +168,10 @@ class gfserver extends base
             trigger_error('NO_GROUP');
         }
 
+        // Only adopt the portal email once it is verified — an unverified
+        // address may belong to someone else.
         $web = $this->account_service()->webAccount($accountId);
-        $email = ($web !== null && $web['email'] !== null && $web['email'] !== '')
+        $email = ($web !== null && $web['email_verified'] && $web['email'] !== null && $web['email'] !== '')
             ? $web['email']
             : $username . '@accounts.invalid';
 

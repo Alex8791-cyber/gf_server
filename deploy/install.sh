@@ -358,8 +358,9 @@ YML
   cp -r "$ext_src" "${forum_dir}/ext/gfserver/sso"
   php "${forum_dir}/bin/phpbbcli.php" extension:enable gfserver/sso || true
   php "${forum_dir}/bin/phpbbcli.php" config:set auth_method gfserver
-  php "${forum_dir}/bin/phpbbcli.php" config:set require_activation 0
-  php "${forum_dir}/bin/phpbbcli.php" config:set allow_password_reset 0
+  # require_activation 3 = USER_ACTIVATION_DISABLE: closes phpBB registration
+  # entirely — accounts come from the portal via SSO auto-provisioning.
+  php "${forum_dir}/bin/phpbbcli.php" config:set require_activation 3
 
   chown -R www-data:www-data "$forum_dir"
 
