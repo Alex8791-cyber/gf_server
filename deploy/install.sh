@@ -272,6 +272,120 @@ APACHE
   log "Web server ready. Run 'certbot --apache' once DNS points at this host (see runbook)."
 }
 
+# --- 5e. phpBB community forum ----------------------------------------------
+PHPBB_VERSION="${PHPBB_VERSION:-3.3.14}"
+
+setup_forum() {
+  # Deployed phpBB framework lives at ${GF_ROOT}/phpbb; the repo keeps our
+  # committed extension source separately at ${GF_ROOT}/forum/ext/...
+  local forum_dir="${GF_ROOT}/phpbb"
+  local ext_src="${GF_ROOT}/forum/ext/gfserver/sso"
+  local archive="/tmp/phpbb-${PHPBB_VERSION}.zip"
+
+  log "Installing phpBB ${PHPBB_VERSION} dependencies..."
+  apt-get install -y curl unzip php-gd php-xml php-zip
+
+  if [ ! -f "${forum_dir}/config.php" ]; then
+    log "Downloading phpBB ${PHPBB_VERSION}..."
+    curl -fsSL -o "$archive" \
+      "https://download.phpbb.com/pub/release/3.3/${PHPBB_VERSION}/phpBB-${PHPBB_VERSION}.zip"
+    rm -rf "$forum_dir"
+    unzip -q "$archive" -d /tmp/phpbb-extract
+    mv /tmp/phpbb-extract/phpBB3 "$forum_dir"
+    rm -rf /tmp/phpbb-extract "$archive"
+
+    log "Creating the gf_forum database and role..."
+    sudo -u postgres psql -v ON_ERROR_STOP=1 -q <<SQL
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gf_forum') THEN
+    CREATE ROLE gf_forum LOGIN PASSWORD '${FORUM_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE gf_forum LOGIN PASSWORD '${FORUM_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+SQL
+    if ! sudo -u postgres psql -tAc \
+         "SELECT 1 FROM pg_database WHERE datname='gf_forum'" | grep -q 1; then
+      sudo -u postgres psql -v ON_ERROR_STOP=1 -q \
+        -c "CREATE DATABASE gf_forum OWNER gf_forum ENCODING 'UTF8' TEMPLATE template0;"
+    fi
+
+    log "Running the phpBB CLI installer..."
+    cat > /tmp/phpbb-install.yml <<YML
+installer:
+  admin:
+    name: ${FORUM_ADMIN_USERNAME}
+    password: ${FORUM_ADMIN_PASSWORD}
+    email: ${FORUM_ADMIN_EMAIL}
+  board:
+    lang: en
+    name: Grand Fantasia
+    description: Grand Fantasia community forum
+  database:
+    dbms: phpbb\\db\\driver\\postgres
+    dbhost: 127.0.0.1
+    dbport: 5432
+    dbuser: gf_forum
+    dbpasswd: ${FORUM_DB_PASSWORD}
+    dbname: gf_forum
+    table_prefix: phpbb_
+  email:
+    enabled: true
+  server:
+    cookie_secure: true
+    server_protocol: https://
+    force_server_vars: true
+    server_name: ${FORUM_DOMAIN}
+    server_port: 443
+    script_path: /
+YML
+    php "${forum_dir}/install/phpbbcli.php" install /tmp/phpbb-install.yml
+    rm -f /tmp/phpbb-install.yml
+    rm -rf "${forum_dir}/install"
+  else
+    log "phpBB already installed — skipping download and install."
+  fi
+
+  log "Deploying and enabling the SSO extension..."
+  mkdir -p "${forum_dir}/ext/gfserver"
+  rm -rf "${forum_dir}/ext/gfserver/sso"
+  cp -r "$ext_src" "${forum_dir}/ext/gfserver/sso"
+  php "${forum_dir}/bin/phpbbcli.php" extension:enable gfserver/sso || true
+  php "${forum_dir}/bin/phpbbcli.php" config:set auth_method gfserver
+  php "${forum_dir}/bin/phpbbcli.php" config:set require_activation 0
+  php "${forum_dir}/bin/phpbbcli.php" config:set allow_password_reset 0
+
+  chown -R www-data:www-data "$forum_dir"
+
+  log "Writing the forum Apache virtual host..."
+  cat > /etc/apache2/sites-available/gfforum.conf <<APACHE
+<VirtualHost *:80>
+    ServerName ${FORUM_DOMAIN}
+    DocumentRoot ${forum_dir}
+    DirectoryIndex index.php
+
+    <Directory ${forum_dir}>
+        Options -Indexes +FollowSymLinks
+        AllowOverride None
+        Require all granted
+    </Directory>
+
+    <FilesMatch \.php\$>
+        SetHandler "proxy:unix:/run/php/php-fpm-gfserver.sock|fcgi://localhost"
+    </FilesMatch>
+
+    ErrorLog \${APACHE_LOG_DIR}/gfforum-error.log
+    CustomLog \${APACHE_LOG_DIR}/gfforum-access.log combined
+</VirtualHost>
+APACHE
+
+  a2ensite gfforum >/dev/null
+  systemctl reload apache2
+  log "Forum ready. Run 'certbot --apache' for ${FORUM_DOMAIN} (see runbook)."
+}
+
 # --- 6. Render component setup.ini files -----------------------------------
 render_configs() {
   log "Writing database credentials into component setup.ini files..."
@@ -353,6 +467,7 @@ main() {
   run_migrations
   bootstrap_admin
   setup_web_server
+  setup_forum
   render_configs
   patch_binaries
   install_systemd
